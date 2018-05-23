@@ -11,7 +11,6 @@ import boto3
 from botocore import exceptions
 
 
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
 
@@ -114,58 +113,3 @@ class Gateway(object):
             LOG.exception('failed to update %s shadow: %s', thing, payload)
             return {}
         return json.loads(shadow['payload'].read())
-
-
-def main():
-    """Main Program.
-    """
-    command = {
-        'jsonrpc': '2.0',
-        'params': {
-            'limits': {
-                'start': 0,
-                'end': 1
-            },
-            'sort': {
-                'order': 'ascending',
-                'method': 'title',
-                'ignorearticle': True
-            },
-            'filter': {
-                'or': [
-                    {
-                        'operator': 'contains',
-                        'field': 'title',
-                        'value': 'Herp'
-                    }
-                ]
-            },
-            'properties': ["title"]
-        },
-        'method': 'VideoLibrary.GetMovies',
-        'id': 1
-    }
-
-    rpc = Gateway()
-
-    response = rpc.command('kodi', json.dumps(command))
-    print response
-    if 'movies' in response:
-        movie_id = response['movies'][0]['movieid']
-        play = {
-            'jsonrpc': '2.0',
-            'method': 'Player.Open',
-            'id': 1,
-            'params': {
-                "item": {
-                    "movieid":movie_id
-                },
-                'options': {'resume': True},
-            }
-        }
-        response = rpc.command('kodi', json.dumps(play), asynchronous=True)
-        print 'this is the response: ', response
-
-
-if __name__ == '__main__':
-    main()

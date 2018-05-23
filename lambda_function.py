@@ -2,8 +2,10 @@
 
 import json
 import logging
+import os
 import uuid
 
+import kodi
 from kodi import rpc
 
 
@@ -29,8 +31,6 @@ def lambda_handler(event, context):
 
 def handleDiscovery(context, event):
     """Handle Device Discovery.
-
-    We could perhaps search for things of a certain 'Kodi' type.
     """
     payload = {}
     header = {
@@ -42,28 +42,28 @@ def handleDiscovery(context, event):
 
     if event['directive']['header']['name'] == 'Discover':
         payload = {
-            "endpoints": [
+            'endpoints': [
                 {
-                    "capabilities": [
+                    'capabilities': [
                         {
-                            "interface": "Alexa.RemoteVideoPlayer",
-                            "type": "AlexaInterface",
-                            "version": "1.0"
+                            'interface': 'Alexa.RemoteVideoPlayer',
+                            'type': 'AlexaInterface',
+                            'version': '1.0'
                         },
                         {
-                            "type": "AlexaInterface",
-                            "interface": "Alexa.PlaybackController",
-                            "version": "3",
-                            "supportedOperations" : ["Play", "Pause", "Stop"]
+                            'type': 'AlexaInterface',
+                            'interface': 'Alexa.PlaybackController',
+                            'version': '3',
+                            'supportedOperations' : ['Play', 'Pause', 'Stop']
                         }
                     ],
-                    "endpointId": "videoDevice-001", # thing arn might be good
-                    "description": "Kodi Media Player",
-                    "displayCategories": ['OTHER'],
-                    "friendlyName": "Kodi",
-                    "manufacturerName": "OSMC"
+                    'endpointId': device.arn,
+                    'description': 'Kodi Media Player',
+                    'displayCategories': ['OTHER'],
+                    'friendlyName': device.name,
+                    'manufacturerName': 'OSMC'
                 }
-            ]
+                for device in kodi.Kodi.find_devices()]
         }
         response = {
             'header': header,
@@ -76,6 +76,9 @@ def handleRemoteVideoPlayer(context, event):
     """Handle Request to Play Video on Kodi device."""
     payload = {}
     endpoint = event['directive']['endpoint']
+
+    # get Kodi for specified endpoint
+    thing = os.path.basename(endpoint)
 
     # build a video filter
     titles = []
@@ -109,7 +112,7 @@ def handleRemoteVideoPlayer(context, event):
     }
 
     try:
-        response = RPC.command('kodi', json.dumps(command))
+        response = RPC.command(thing, json.dumps(command))
         if 'movies' in response:
             movie_id = response['movies'][0]['movieid']
             play = {
@@ -125,7 +128,7 @@ def handleRemoteVideoPlayer(context, event):
                     },
                 }
             }
-            response = RPC.command('kodi', json.dumps(play), asynchronous=True)
+            response = RPC.command(thing, json.dumps(play), asynchronous=True)
             LOG.debug('RPC response: %s', response)
     except StandardError:
         LOG.exception('Something went wrong')
