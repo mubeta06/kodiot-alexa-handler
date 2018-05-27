@@ -2,18 +2,13 @@
 
 import json
 import logging
-import os
 import uuid
 
 import kodi
-from kodi import rpc
 
 
 logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
-
-
-RPC = rpc.Gateway()
 
 
 def lambda_handler(event, context):
@@ -22,15 +17,18 @@ def lambda_handler(event, context):
     LOG.debug('event %s', event)
     namespace = event['directive']['header']['namespace']
     if namespace == 'Alexa.Discovery':
-        return handleDiscovery(context, event)
+        return handle_discovery(context, event)
     elif namespace == 'Alexa.RemoteVideoPlayer':
-        return handleRemoteVideoPlayer(context, event)
+        return handle_remote_video_player(context, event)
     elif namespace == 'Alexa.PlaybackController':
-        return handlePlaybackController(context, event)
+        return handle_playback_controller(context, event)
 
 
-def handleDiscovery(context, event):
+def handle_discovery(context, event):
     """Handle Device Discovery.
+
+    Need to ideally find device based on auth token. Need to investigate AWS
+    Cognito for managing this.
     """
     payload = {}
     header = {
@@ -39,6 +37,7 @@ def handleDiscovery(context, event):
         "namespace": "Alexa.Discovery",
         "payloadVersion": "3"
     }
+    token = event['directive']['payload']['scope']['token']
 
     if event['directive']['header']['name'] == 'Discover':
         payload = {
@@ -54,17 +53,19 @@ def handleDiscovery(context, event):
                             'type': 'AlexaInterface',
                             'interface': 'Alexa.PlaybackController',
                             'version': '3',
-                            'supportedOperations' : ['Play', 'Pause', 'Stop']
+                            'supportedOperations': ['Play', 'Pause', 'Stop']
                         }
                     ],
-                    'endpointId': device.arn,
+                    'endpointId': device.endpoint,
                     'description': 'Kodi Media Player',
                     'displayCategories': ['OTHER'],
                     'friendlyName': device.name,
                     'manufacturerName': 'OSMC'
                 }
-                for device in kodi.Kodi.find_devices()]
+                for device in kodi.Kodi.find_devices(token)]
         }
+
+        LOG.debug('found %d devices for %s', len(payload['endpoints']), token)
         response = {
             'header': header,
             'payload': payload
@@ -72,66 +73,24 @@ def handleDiscovery(context, event):
         return {'event': response}
 
 
-def handleRemoteVideoPlayer(context, event):
+def handle_remote_video_player(context, event):
     """Handle Request to Play Video on Kodi device."""
     payload = {}
     endpoint = event['directive']['endpoint']
-
-    # get Kodi for specified endpoint
-    thing = os.path.basename(endpoint)
+    device = kodi.Kodi.from_endpoint(endpoint['endpointId'])
 
     # build a video filter
     titles = []
     for entity in event['directive']['payload']['entities']:
         if entity['type'] == 'Video' or entity['type'] == 'Franchise':
-            titles.append({'operator': 'contains',
-                           'field': 'title',
-                           'value': entity['value']
-                          })
+            titles.append(entity['value'])
         elif entity['type'] == 'MediaType':
             pass
 
-    command = {
-        'jsonrpc': '2.0',
-        'params': {
-            'limits': {
-                'start': 0,
-                'end': 1
-            },
-            'sort': {
-                'order': 'ascending',
-                'method': 'title'
-            },
-            'filter': {
-                'or': titles
-            },
-            'properties': ["title"]
-        },
-        'method': 'VideoLibrary.GetMovies',
-        'id': 1
-    }
+    movie_id = device.find_movie(titles)
 
-    try:
-        response = RPC.command(thing, json.dumps(command))
-        if 'movies' in response:
-            movie_id = response['movies'][0]['movieid']
-            play = {
-                'jsonrpc': '2.0',
-                'method': 'Player.Open',
-                'id': 1,
-                'params': {
-                    "item": {
-                        "movieid":movie_id
-                    },
-                    'options': {
-                        'resume': True
-                    },
-                }
-            }
-            response = RPC.command(thing, json.dumps(play), asynchronous=True)
-            LOG.debug('RPC response: %s', response)
-    except StandardError:
-        LOG.exception('Something went wrong')
+    if movie_id is not None:
+        device.play_movie(movie_id)
 
     header = {
         'messageId': str(uuid.uuid1()),
@@ -148,30 +107,21 @@ def handleRemoteVideoPlayer(context, event):
     return {'event': response}
 
 
-def handlePlaybackController(context, event):
+def handle_playback_controller(context, event):
     """Handle Request Control Video on Kodi device."""
     payload = {}
     endpoint = event['directive']['endpoint']
+    device = kodi.Kodi.from_endpoint(endpoint['endpointId'])
 
     if event['directive']['header']['name'] == 'Stop':
         LOG.debug('Handling Stop directive')
-        method = 'Player.Stop'
+        device.stop()
     elif event['directive']['header']['name'] == 'Pause':
         LOG.debug('Handling Pause directive')
-        method = 'Player.PlayPause'
+        device.pause()
     elif event['directive']['header']['name'] == 'Play':
         LOG.debug('Handling Play directive')
-        method = 'Player.PlayPause'
-
-    command = {
-        'jsonrpc': '2.0',
-        'method': method,
-        'params': {
-            'playerid': 1
-        },
-        'id': 1
-    }
-    response = RPC.command('kodi', json.dumps(command), asynchronous=True)
+        device.resume()
 
     header = {
         'messageId': str(uuid.uuid1()),

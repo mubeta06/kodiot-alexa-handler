@@ -13,6 +13,8 @@ from botocore import exceptions
 
 LOG = logging.getLogger(__name__)
 
+IOT = boto3.client('iot-data', region_name='ap-southeast-2')
+
 
 class Gateway(object):
 
@@ -22,8 +24,6 @@ class Gateway(object):
     to MQTT connected Kodi Thing.
 
     """
-
-    IOT = boto3.client('iot-data', region_name='ap-southeast-2')
 
     MAX_RETRIES = 10
 
@@ -35,7 +35,7 @@ class Gateway(object):
             rpc (str): JSON RPC command payload.
 
         Returns:
-            str: JSON RPC Response payload empty if fail.
+            dict: JSON RPC Response payload empty if fail.
         """
         try:
             cmd = json.loads(rpc)
@@ -44,10 +44,11 @@ class Gateway(object):
             return {}
 
         shadow = self.get_shadow(thing)
+        print shadow
 
-        if 'desired' in shadow['state']: # pending command let's clean it up
+        if shadow and 'desired' in shadow['state']: # pending command clean up
             try:
-                self.IOT.delete_thing_shadow(thingName=thing)
+                IOT.delete_thing_shadow(thingName=thing)
             except exceptions.ClientError:
                 LOG.exception('problem deleting shadow for %s', thing)
                 return {}
@@ -89,7 +90,7 @@ class Gateway(object):
 
         """
         try:
-            shadow = self.IOT.get_thing_shadow(thingName=thing)
+            shadow = IOT.get_thing_shadow(thingName=thing)
         except exceptions.ClientError:
             LOG.exception('failed to retrieve %s shadow', thing)
             return {}
@@ -108,7 +109,7 @@ class Gateway(object):
         """
         try:
             params = {'thingName':thing, 'payload':json.dumps(payload)}
-            shadow = self.IOT.update_thing_shadow(**params)
+            shadow = IOT.update_thing_shadow(**params)
         except (exceptions.ClientError, ValueError, TypeError):
             LOG.exception('failed to update %s shadow: %s', thing, payload)
             return {}
