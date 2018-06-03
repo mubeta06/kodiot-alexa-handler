@@ -81,12 +81,20 @@ def handle_remote_video_player(context, event):
 
     # build a video filter
     titles = []
+    media_type = None
+    season = None
+    episode = None
     for entity in event['directive']['payload']['entities']:
         if entity['type'] == 'Video' or entity['type'] == 'Franchise':
             titles.append(entity['value'])
         elif entity['type'] == 'MediaType':
-            pass
+            media_type = entity['value']
+        elif entity['type'] == 'Season':
+            season = entity['value']
+        elif entity['type'] == 'Episode':
+            episode = entity['value']
 
+    print 'MediaType: ', media_type
     movie_id = device.find_movie(titles)
 
     if movie_id is not None:

@@ -44,17 +44,24 @@ class Gateway(object):
             return {}
 
         shadow = self.get_shadow(thing)
-        print shadow
 
-        if shadow and 'desired' in shadow['state']: # pending command clean up
-            try:
-                IOT.delete_thing_shadow(thingName=thing)
-            except exceptions.ClientError:
-                LOG.exception('problem deleting shadow for %s', thing)
-                return {}
+        if shadow:
+            if 'desired' in shadow['state']: # pending command clean up
+                try:
+                    IOT.delete_thing_shadow(thingName=thing)
+                except exceptions.ClientError:
+                    LOG.exception('problem deleting shadow for %s', thing)
+                    return {}
+            elif 'error' in shadow['state'].get('reported', {}):
+                LOG.error('RPC Error: %s', shadow['state']['reported']['error'])
+                try:
+                    IOT.delete_thing_shadow(thingName=thing)
+                except exceptions.ClientError:
+                    LOG.exception('problem deleting shadow for %s', thing)
+                    return {}
 
         # issue command
-        state = {'state': {'desired': cmd}}
+        state = {'state': {'desired': cmd, 'reported': None}}
         shadow = self.update_shadow(thing, state)
 
         # verify dispatch
@@ -75,6 +82,14 @@ class Gateway(object):
 
         if retries == self.MAX_RETRIES:
             LOG.error('maximum retries exceeded')
+            return {}
+
+        if 'error' in shadow['state']['reported']:
+            LOG.error('RPC Error: %s', shadow['state']['reported']['error'])
+            try:
+                IOT.delete_thing_shadow(thingName=thing)
+            except exceptions.ClientError:
+                LOG.exception('problem deleting shadow for %s', thing)
             return {}
 
         return shadow['state']['reported']['result']
