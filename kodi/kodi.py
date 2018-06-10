@@ -31,7 +31,7 @@ class Kodi(object):
         self._rpc = rpc.Gateway()
 
     @staticmethod
-    def find_devices(token):
+    def find_devices(_token):
         """Return a generator of Kodi's.
 
         TODO: handle pagination. Filter by token.
@@ -151,6 +151,84 @@ class Kodi(object):
         rsp = self._rpc.command(self._thing, command)
         return rsp['movies'][0]['movieid'] if 'movies' in rsp else None
 
+    def search(self, titles):
+        """Search Kodi Library for specified titles. Search includes both Movies
+        and TV shows.
+
+        Args:
+            titles (list): List of Movie titles.
+
+        Returns:
+            dict: Search RPC response.
+
+        """
+        titles = [{'operator': 'contains',
+                   'field': 'title',
+                   'value': title
+                  } for title in titles]
+        methods = ['VideoLibrary.GetMovies', 'VideoLibrary.GetTVShows']
+
+        rsp = {}
+        for method in methods:
+            command = {
+                'jsonrpc': '2.0',
+                'id': 1,
+                'params': {
+                    'limits': {
+                        'start': 0,
+                        'end': 1
+                    },
+                    'sort': {
+                        'order': 'ascending',
+                        'method': 'title',
+                        'ignorearticle': True
+                    },
+                    'filter': {
+                        'or': titles
+                    },
+                    'properties': ["title"]
+                },
+                'method': method
+            }
+            rsp.update(self._rpc.command(self._thing, json.dumps(command)))
+        return rsp
+
+    def get_next_unwatched_episode(self, tvshow_id):
+        """Find the next unwatched episode for specified tv show id.
+
+        Args:
+            tvshow_id (int): TV Show identifier.
+
+        Returns:
+            int: Episode id or None if search failed.
+
+        """
+        command = json.dumps({
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'VideoLibrary.GetEpisodes',
+            'params': {
+                'tvshowid': tvshow_id,
+                'limits': {
+                    'start': 0,
+                    'end': 1
+                },
+                'sort': {
+                    'method': 'episode',
+                    'order': 'ascending'
+                },
+                'filter': {
+                    'operator': 'lessthan',
+                    'field': 'playcount',
+                    'value': '1'
+                },
+                'properties': ['playcount']
+            }
+        })
+
+        rsp = self._rpc.command(self._thing, command)
+        return rsp['episodes'][0]['episodeid'] if 'episodes' in rsp else None
+
     def play_movie(self, movie_id):
         """Play the specified Movie on Kodi instance."""
         command = json.dumps({
@@ -174,13 +252,12 @@ class Kodi(object):
             'method': 'Player.Open',
             'params': {
                 'item': {
-                    'movieid': episode_id
+                    'episodeid': episode_id
                 },
                 'options': {'resume': True},
             }
         })
         return self._rpc.command(self._thing, command, asynchronous=True)
-
 
     def pause(self):
         """Pause Kodi instance."""

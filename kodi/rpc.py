@@ -78,7 +78,7 @@ class Gateway(object):
             shadow = self.get_shadow(thing)
             retries += 1
             time.sleep(2**retries * 0.001)
-        LOG.info('attempted %d times', retries)
+        LOG.debug('attempted %d times', retries)
 
         if retries == self.MAX_RETRIES:
             LOG.error('maximum retries exceeded')

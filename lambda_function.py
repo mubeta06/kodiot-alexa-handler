@@ -94,11 +94,22 @@ def handle_remote_video_player(context, event):
         elif entity['type'] == 'Episode':
             episode = entity['value']
 
-    print 'MediaType: ', media_type
-    movie_id = device.find_movie(titles)
+    print 'MediaType: ', media_type # useless
 
-    if movie_id is not None:
-        device.play_movie(movie_id)
+    results = device.search(titles)
+
+    if 'movies' in results:
+        device.play_movie(results['movies'][0]['movieid'])
+    elif 'tvshows' in results:
+        tvshowid = results['tvshows'][0]['tvshowid']
+        episodeid = device.get_next_unwatched_episode(tvshowid)
+        if episodeid is not None:
+            device.play_episode(episodeid)
+        else:
+            LOG.info('unable to get next unwatched episode for tvshowid %d',
+                     tvshowid)
+    else:
+        LOG.info('could not find title %s', titles)
 
     header = {
         'messageId': str(uuid.uuid1()),
