@@ -1,6 +1,5 @@
 """Kodi Alexa Handler."""
 
-import json
 import logging
 import uuid
 
@@ -53,7 +52,10 @@ def handle_discovery(context, event):
                             'type': 'AlexaInterface',
                             'interface': 'Alexa.PlaybackController',
                             'version': '3',
-                            'supportedOperations': ['Play', 'Pause', 'Stop']
+                            'supportedOperations': ['Play', 'Pause', 'Stop',
+                                                    'Next', 'Previous',
+                                                    'FastForward', 'Rewind',
+                                                    'StartOver']
                         }
                     ],
                     'endpointId': device.endpoint,
@@ -81,7 +83,7 @@ def handle_remote_video_player(context, event):
 
     # build a video filter
     titles = []
-    media_type = None
+    media_type = None # seemingly useless
     season = None
     episode = None
     for entity in event['directive']['payload']['entities']:
@@ -90,11 +92,9 @@ def handle_remote_video_player(context, event):
         elif entity['type'] == 'MediaType':
             media_type = entity['value']
         elif entity['type'] == 'Season':
-            season = entity['value']
+            season = int(entity['value'])
         elif entity['type'] == 'Episode':
-            episode = entity['value']
-
-    print 'MediaType: ', media_type # useless
+            episode = int(entity['value'])
 
     results = device.search(titles)
 
@@ -102,7 +102,7 @@ def handle_remote_video_player(context, event):
         device.play_movie(results['movies'][0]['movieid'])
     elif 'tvshows' in results:
         tvshowid = results['tvshows'][0]['tvshowid']
-        episodeid = device.get_next_unwatched_episode(tvshowid)
+        episodeid = device.get_episode(tvshowid, season=season, episode=episode)
         if episodeid is not None:
             device.play_episode(episodeid)
         else:
@@ -141,6 +141,23 @@ def handle_playback_controller(context, event):
     elif event['directive']['header']['name'] == 'Play':
         LOG.debug('Handling Play directive')
         device.resume()
+    elif event['directive']['header']['name'] == 'Next':
+        LOG.debug('Handling Next directive')
+        device.next()
+    elif event['directive']['header']['name'] == 'Previous':
+        LOG.debug('Handling Previous directive')
+        device.previous()
+    elif event['directive']['header']['name'] == 'FastForward':
+        LOG.debug('Handling FastForward directive')
+        device.fast_forward()
+    elif event['directive']['header']['name'] == 'Rewind':
+        LOG.debug('Handling Rewind directive')
+        device.rewind()
+    elif event['directive']['header']['name'] == 'StartOver':
+        LOG.debug('Handling StartOver directive')
+        device.seek_to_percentage(0)
+    else:
+        LOG.error('Unknown directive %s', event['directive']['header']['name'])
 
     header = {
         'messageId': str(uuid.uuid1()),

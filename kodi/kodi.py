@@ -186,44 +186,57 @@ class Kodi(object):
                     'filter': {
                         'or': titles
                     },
-                    'properties': ["title"]
+                    'properties': ['title']
                 },
                 'method': method
             }
             rsp.update(self._rpc.command(self._thing, json.dumps(command)))
         return rsp
 
-    def get_next_unwatched_episode(self, tvshow_id):
-        """Find the next unwatched episode for specified tv show id.
+    def get_episode(self, tvshowid, season=None, episode=None):
+        """Find the next unwatched episode for specified tv show id and optional
+        season and episode.
 
         Args:
             tvshow_id (int): TV Show identifier.
+            season (int): Season Number.
+            episode (int): Episode Number.
 
         Returns:
             int: Episode id or None if search failed.
 
         """
+        params = {
+            'tvshowid': tvshowid,
+            'limits': {
+                'start': 0,
+                'end': 1
+            },
+            'sort': {
+                'method': 'episode',
+                'order': 'ascending'
+            },
+            'properties': ['playcount', 'episode']
+        }
+        if season is not None:
+            params['season'] = season
+        if episode is not None:
+            params['filter'] = {
+                'operator': 'is',
+                'field': 'episode',
+                'value': str(episode)
+            }
+        else:
+            params['filter'] = {
+                'operator': 'lessthan',
+                'field': 'playcount',
+                'value': '1',
+            }
         command = json.dumps({
             'jsonrpc': '2.0',
             'id': 1,
             'method': 'VideoLibrary.GetEpisodes',
-            'params': {
-                'tvshowid': tvshow_id,
-                'limits': {
-                    'start': 0,
-                    'end': 1
-                },
-                'sort': {
-                    'method': 'episode',
-                    'order': 'ascending'
-                },
-                'filter': {
-                    'operator': 'lessthan',
-                    'field': 'playcount',
-                    'value': '1'
-                },
-                'properties': ['playcount']
-            }
+            'params': params
         })
 
         rsp = self._rpc.command(self._thing, command)
@@ -292,6 +305,100 @@ class Kodi(object):
                 'method': 'Player.Stop',
                 'params': {
                     'playerid': playerid
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def next(self):
+        """Send next command to the Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.GoTo',
+                'params': {
+                    'playerid': playerid,
+                    'to': 'next'
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def previous(self):
+        """Send previous command to the Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.GoTo',
+                'params': {
+                    'playerid': playerid,
+                    'to': 'previous'
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def fast_forward(self):
+        """Fast Forward Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.SetSpeed',
+                'params': {
+                    'playerid': playerid,
+                    'speed': 'increment'
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def rewind(self):
+        """Rewind Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.SetSpeed',
+                'params': {
+                    'playerid': playerid,
+                    'speed': 'decrement'
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def seek_to_percentage(self, percentage):
+        """Seek to percentage on Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.Seek',
+                'params': {
+                    'playerid': playerid,
+                    'value': {
+                        'percentage': percentage
+                    }
+                }
+            })
+            self._rpc.command(self._thing, command, asynchronous=True)
+
+    def seek_seconds(self, seconds):
+        """Seek specified number of seconds on Kodi instance."""
+        playerid = self.active_player
+        if playerid is not None:
+            command = json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Player.Seek',
+                'params': {
+                    'playerid': playerid,
+                    'value': {
+                        'seconds': seconds
+                    }
                 }
             })
             self._rpc.command(self._thing, command, asynchronous=True)
